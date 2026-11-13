@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tornspector"
+version = "0.1.0"
+description = "ranked war intel reports for torn factions"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = []
+
+[project.scripts]
+tornspector = "tornspector.cli:main"
+
+[tool.setuptools]
+packages = ["tornspector"]
