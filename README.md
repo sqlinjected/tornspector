@@ -49,4 +49,8 @@ For the activity pages run `python -m tornspector watch 12345` and leave it on f
 | Key storage & sharing | Only in your `.env`, not logged or shared |
 | Key access level | Public |
 
+## Reporting bugs
+
+If you find a bug, open an issue and include the steps to reproduce it.
+
 MIT
