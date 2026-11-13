@@ -1,5 +1,7 @@
 # tornspector
 
+![tests](https://github.com/sqlinjected/tornspector/actions/workflows/tests.yml/badge.svg)
+
 Ranked war intel on enemy factions in Torn. Someone was selling these for 5 xanax each so I made my own lol.
 
 ![sample](docs/sample-report.png)
