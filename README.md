@@ -4,7 +4,7 @@ Ranked war intel on enemy factions in Torn. Someone was selling these for 5 xana
 
 ![sample](docs/sample-report.png)
 
-[example report](docs/sample-report.html) (fake faction)
+[example report](docs/sample-report.html)
 
 ## setup
 
