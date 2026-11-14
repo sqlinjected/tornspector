@@ -156,6 +156,34 @@ def cmd_watch(args) -> int:
         time.sleep(args.interval - (time.time() % args.interval) + 2)
 
 
+def cmd_export(args) -> int:
+    if not Path(args.activity_db).exists():
+        print(f"no activity log at {args.activity_db}, run watch first", file=sys.stderr)
+        return 1
+    con = activity.connect(args.activity_db)
+    out = args.out or Path("data") / f"activity-{args.faction_id}.csv"
+    n = activity.export_csv(con, args.faction_id, out)
+    if not n:
+        print(f"nothing logged for faction {args.faction_id} yet", file=sys.stderr)
+        return 1
+    print(f"{n} rows -> {out}")
+    return 0
+
+
+def cmd_import(args) -> int:
+    if not args.csv_file.exists():
+        print(f"Could not find {args.csv_file}", file=sys.stderr)
+        return 2
+    con = activity.connect(args.activity_db)
+    try:
+        n = activity.import_csv(con, args.csv_file)
+    except (OSError, ValueError, csv.Error) as exc:
+        print(f"Could not read activity CSV: {exc}", file=sys.stderr)
+        return 2
+    print(f"added {n} rows to {args.activity_db}")
+    return 0
+
+
 def cmd_demo(args) -> int:
     from .demo import build_demo
 
@@ -190,6 +218,17 @@ def main(argv=None) -> int:
     watch_p.add_argument("--activity-db", default="data/activity.db")
     watch_p.add_argument("--once", action="store_true", help="poll once and exit")
     watch_p.set_defaults(func=cmd_watch)
+
+    export_p = sub.add_parser("export", help="save the activity log as csv")
+    export_p.add_argument("faction_id", type=int)
+    export_p.add_argument("--out", type=Path, help="csv path (default data/activity-ID.csv)")
+    export_p.add_argument("--activity-db", default="data/activity.db")
+    export_p.set_defaults(func=cmd_export)
+
+    import_p = sub.add_parser("import", help="add an activity csv to the log")
+    import_p.add_argument("csv_file", type=Path)
+    import_p.add_argument("--activity-db", default="data/activity.db")
+    import_p.set_defaults(func=cmd_import)
 
     demo_p = sub.add_parser("demo", help="fake data report")
     demo_p.add_argument("--out", default="reports")

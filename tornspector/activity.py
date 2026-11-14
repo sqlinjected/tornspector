@@ -1,5 +1,6 @@
 """polls the roster and logs who was active (last action in the last 15 min)"""
 
+import csv
 import sqlite3
 import time
 from pathlib import Path
@@ -56,6 +57,57 @@ def record_poll(con: sqlite3.Connection, faction_id: int, members: list[dict], t
     con.executemany("INSERT OR IGNORE INTO sightings VALUES (?, ?, ?, ?, ?, ?)", rows)
     con.commit()
     return len(rows)
+
+
+CSV_COLUMNS = ["faction_id", "ts", "time_tct", "player_id", "name", "last_action", "online"]
+
+
+def export_csv(con: sqlite3.Connection, faction_id: int, path: str | Path) -> int:
+    # time_tct is just so it reads ok in a spreadsheet, import uses ts
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rows = con.execute(
+        "SELECT ts, player_id, name, last_action, online FROM sightings WHERE faction_id=? ORDER BY ts, player_id",
+        (faction_id,),
+    )
+    n = 0
+    with path.open("w", encoding="utf-8", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerow(CSV_COLUMNS)
+        for ts, pid, name, last_action, online in rows:
+            tct = time.strftime("%Y-%m-%d %H:%M", time.gmtime(ts))
+            writer.writerow([faction_id, ts, tct, pid, name or "", last_action, online])
+            n += 1
+    return n
+
+
+def import_csv(con: sqlite3.Connection, path: str | Path) -> int:
+    # for merging someone elses watch log into yours. dupes get skipped
+    polls = set()
+    sightings = []
+    with Path(path).open(encoding="utf-8-sig", newline="") as file:
+        rows = csv.DictReader(file)
+        missing = {"faction_id", "ts", "player_id", "last_action", "online"} - set(rows.fieldnames or [])
+        if missing:
+            raise ValueError(f"missing columns: {', '.join(sorted(missing))}")
+        for row in rows:
+            try:
+                fid = int(row["faction_id"])
+                ts = int(row["ts"])
+                pid = int(row["player_id"])
+                last_action = int(row["last_action"] or 0)
+                online = int(row["online"] or 0)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"line {rows.line_num}: use whole numbers") from exc
+            polls.add((fid, ts))
+            sightings.append((fid, ts, pid, row.get("name") or None, last_action, 1 if online else 0))
+
+    con.executemany("INSERT OR IGNORE INTO polls VALUES (?, ?)", sorted(polls))
+    before = con.total_changes
+    con.executemany("INSERT OR IGNORE INTO sightings VALUES (?, ?, ?, ?, ?, ?)", sightings)
+    added = con.total_changes - before
+    con.commit()
+    return added
 
 
 def _block_label(start_slot: int, n_slots: int) -> str:
