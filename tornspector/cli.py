@@ -1,6 +1,7 @@
 """tornspector report / watch / demo"""
 
 import argparse
+import csv
 import json
 import os
 import re
@@ -45,7 +46,40 @@ def write_outputs(result, act, out_dir: Path, author: str, as_json: bool) -> Pat
     return html_path
 
 
+def load_spies(path: Path) -> dict[int, dict]:
+    spies = {}
+    with path.open(encoding="utf-8-sig", newline="") as file:
+        rows = csv.DictReader(file, strict=True)
+        required_columns = {"player_id", "total"}
+        if not rows.fieldnames or not required_columns <= set(rows.fieldnames):
+            raise ValueError("expected player_id and total columns")
+        if len(set(rows.fieldnames)) != len(rows.fieldnames):
+            raise ValueError("CSV has duplicate column names")
+
+        for row in rows:
+            try:
+                player_id = int(row["player_id"])
+                total = int(row["total"])
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"line {rows.line_num}: use whole numbers") from exc
+
+            if None in row or player_id <= 0 or total <= 0:
+                raise ValueError(f"line {rows.line_num}: check the player ID and total")
+            if player_id in spies:
+                raise ValueError(f"line {rows.line_num}: duplicate player ID {player_id}")
+
+            spies[player_id] = {"bs_estimate": total, "bs_source": "spy"}
+
+    return spies
+
+
 def cmd_report(args) -> int:
+    try:
+        estimates = load_spies(args.spies) if args.spies else {}
+    except (OSError, ValueError, csv.Error) as exc:
+        print(f"Could not read spy CSV: {exc}", file=sys.stderr)
+        return 2
+
     key = os.environ.get("TORN_API_KEY", "")
     if not key:
         print("no TORN_API_KEY (put it in .env)", file=sys.stderr)
@@ -76,14 +110,16 @@ def cmd_report(args) -> int:
         if war:
             parsed.append(war)
 
-    estimates = {}
-    ff_key = os.environ.get("FFSCOUTER_KEY") or key
     if args.ffscouter and not args.no_ffscouter:
-        try:
-            estimates = ffscouter.get_stats(ff_key, [m["id"] for m in raw_members])
-            print(f"  FFScouter estimates: {len(estimates)}/{len(raw_members)}")
-        except Exception as exc:  # estimates are optional
-            print(f"  FFScouter skipped: {exc}")
+        missing_ids = [int(m["id"]) for m in raw_members if int(m["id"]) not in estimates]
+        if missing_ids:
+            ff_key = os.environ.get("FFSCOUTER_KEY") or key
+            try:
+                scouted = ffscouter.get_stats(ff_key, missing_ids)
+                estimates = {**scouted, **estimates}
+                print(f"  FFScouter estimates: {len(scouted)}/{len(missing_ids)}")
+            except Exception as exc:  # estimates are optional
+                print(f"  FFScouter skipped: {exc}")
 
     members = [analysis.parse_member(m, estimates.get(int(m["id"]))) for m in raw_members]
     result = analysis.analyse(faction, members, parsed, now)
@@ -140,6 +176,7 @@ def main(argv=None) -> int:
     report_p.add_argument("--out", default="reports", help="output folder")
     report_p.add_argument("--author", default="", help="your name for the cover")
     report_p.add_argument("--json", action="store_true", help="also save json")
+    report_p.add_argument("--spies", type=Path, help="local CSV with player_id and total")
     report_p.add_argument("--ffscouter", action="store_true", help="include FFScouter battle-stat estimates")
     report_p.add_argument("--no-ffscouter", action="store_true", help="skip ffscouter")
     report_p.add_argument("--activity-db", default="data/activity.db")
