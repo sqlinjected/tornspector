@@ -72,6 +72,7 @@ class Member:
     consistency: float = 0.0
     threat: float = 0.0
     role: str = ""
+    bs_source: str | None = None
 
 
 def parse_war(report: dict, faction_id: int) -> War | None:
@@ -111,6 +112,7 @@ def parse_member(raw: dict, estimate: dict | None = None) -> Member:
         state=status.get("state", ""),
         bs_estimate=(estimate or {}).get("bs_estimate"),
         fair_fight=(estimate or {}).get("fair_fight"),
+        bs_source=(estimate or {}).get("bs_source"),
     )
 
 
