@@ -15,6 +15,13 @@ def fmt_bs(n: float | None) -> str:
     return f"{n:.0f}"
 
 
+def fmt_member_bs(member) -> str:
+    total = fmt_bs(member.bs_estimate)
+    if member.bs_source == "spy" and total != "-":
+        return f"{total} (spy)"
+    return total
+
+
 def _pct(x, digits=1):
     return "-" if x is None else f"{x * 100:.{digits}f}%"
 
@@ -114,15 +121,15 @@ def render(result: dict, activity: dict | None = None, author: str = "") -> str:
         summary_lines.append(f"{summary['new_count']} new, no war history yet.")
     for m in result["unreliable"]:
         summary_lines.append(
-            f"Watch out for {escape(m.name)}: {fmt_bs(m.bs_estimate)} est. stats but only "
+            f"Watch out for {escape(m.name)}: {fmt_member_bs(m)} battle stats but only "
             f"{_pct(m.participation, 0)} attendance."
         )
     if not summary["has_estimates"]:
-        summary_lines.append("No FFScouter stats loaded.")
+        summary_lines.append("No battle stats loaded.")
     summary_html = "".join(f"<li>{line}</li>" for line in summary_lines)
 
     heavy_html = "".join(
-        f"<li><b>{escape(m.name)}</b> ({m.role}) - {fmt_bs(m.bs_estimate)} est. BS - "
+        f"<li><b>{escape(m.name)}</b> ({m.role}) - {fmt_member_bs(m)} battle stats - "
         f"{_pct(m.participation, 0)} attendance - revivable: {_yn(m.revivable)}</li>"
         for m in result["heavy"]
     ) or "<li>None.</li>"
@@ -130,7 +137,7 @@ def render(result: dict, activity: dict | None = None, author: str = "") -> str:
     by_threat = sorted(members, key=lambda m: m.threat, reverse=True)
     core = by_threat[:15]
     core_rows = "".join(
-        f"<tr><td>{_name(m)}</td><td class='r'>{fmt_bs(m.bs_estimate)}</td><td class='r'><b>{m.threat:.1f}</b></td>"
+        f"<tr><td>{_name(m)}</td><td class='r'>{fmt_member_bs(m)}</td><td class='r'><b>{m.threat:.1f}</b></td>"
         f"<td>{m.role}</td><td class='r'>{_pct(m.participation, 0)}</td><td>{_yn(m.revivable)}</td></tr>"
         for m in core
     )
@@ -138,7 +145,7 @@ def render(result: dict, activity: dict | None = None, author: str = "") -> str:
     by_bs = sorted(members, key=lambda m: (m.bs_estimate is None, -(m.bs_estimate or 0)))
     roster_rows = "".join(
         f"<tr><td class='r'>{i}</td><td>{_name(m)}</td><td>{m.role}</td><td class='r'>{m.threat:.1f}</td>"
-        f"<td class='r'>{fmt_bs(m.bs_estimate)}</td><td class='r'>{m.eligible}</td><td class='r'>{m.active}</td>"
+        f"<td class='r'>{fmt_member_bs(m)}</td><td class='r'>{m.eligible}</td><td class='r'>{m.active}</td>"
         f"<td class='r'>{_pct(m.participation)}</td><td class='r'>{_pct(m.no_show)}</td>"
         f"<td class='r'>{m.avg_per_war:.1f}</td><td class='r'>{m.avg_per_active:.1f}</td>"
         f"<td class='r'>{_pct(m.hit_share)}</td><td>{m.trend}</td><td>{_yn(m.revivable)}</td></tr>"
@@ -167,7 +174,7 @@ def render(result: dict, activity: dict | None = None, author: str = "") -> str:
         )
         blocks_head = "".join(f"<th>{h:02d}-{h + 2:02d}</th>" for h in range(0, 24, 2))
         heat_rows = "".join(
-            f"<tr><td>{escape(m.name)}</td><td class='r'>{m.threat:.1f}</td><td class='r'>{fmt_bs(m.bs_estimate)}</td>"
+            f"<tr><td>{escape(m.name)}</td><td class='r'>{m.threat:.1f}</td><td class='r'>{fmt_member_bs(m)}</td>"
             + "".join(_heat(v) for v in activity["player_blocks"].get(m.id, [None] * 12))
             + "</tr>"
             for m in by_threat[:10]
@@ -196,7 +203,7 @@ def render(result: dict, activity: dict | None = None, author: str = "") -> str:
 <section class="page">
   <h2>Key threat activity</h2>
   <p class="sub">% of polls they were active in each 2h block (TCT). Top 10 by threat.</p>
-  <table class="heatmap"><thead><tr><th>Player</th><th>Threat</th><th>Est. BS</th>{blocks_head}</tr></thead><tbody>{heat_rows}</tbody></table>
+  <table class="heatmap"><thead><tr><th>Player</th><th>Threat</th><th>BS</th>{blocks_head}</tr></thead><tbody>{heat_rows}</tbody></table>
 </section>"""
     else:
         activity_html = """
@@ -237,13 +244,13 @@ def render(result: dict, activity: dict | None = None, author: str = "") -> str:
 <section class="page">
   <h2>Core 15</h2>
   <p class="sub">Top 15 by war threat.</p>
-  <table><thead><tr><th>Player</th><th>Est. battle stats</th><th>War Threat</th><th>Role</th><th>Attendance</th><th>Revivable</th></tr></thead>
+  <table><thead><tr><th>Player</th><th>Battle stats</th><th>War Threat</th><th>Role</th><th>Attendance</th><th>Revivable</th></tr></thead>
   <tbody>{core_rows}</tbody></table>
 </section>
 
 <section class="page">
   <h2>Roster</h2>
-  <table class="dense"><thead><tr><th>#</th><th>Player</th><th>Role</th><th>Threat</th><th>Est. BS</th><th>Eligible</th><th>Active</th>
+  <table class="dense"><thead><tr><th>#</th><th>Player</th><th>Role</th><th>Threat</th><th>BS</th><th>Eligible</th><th>Active</th>
   <th>Participation</th><th>No-show</th><th>Avg/war</th><th>Avg/active</th><th>Hit share</th><th>Trend</th><th>Revivable</th></tr></thead>
   <tbody>{roster_rows}</tbody></table>
 </section>
@@ -271,7 +278,7 @@ def render(result: dict, activity: dict | None = None, author: str = "") -> str:
   <h2>Notes</h2>
   <ul class="exec">
     <li>Only wars a member was in the faction for count toward their numbers.</li>
-    <li>Battle stats are FFScouter estimates.</li>
+    <li>Values marked (spy) are imported snapshots. Other live battle stats are FFScouter estimates.</li>
     <li>Threat level: under 100 avg hits/war LOW, 100-249 MODERATE, 250-499 HIGH, 500+ SEVERE.</li>
   </ul>
 </section>
