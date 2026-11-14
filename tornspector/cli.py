@@ -78,7 +78,7 @@ def cmd_report(args) -> int:
 
     estimates = {}
     ff_key = os.environ.get("FFSCOUTER_KEY") or key
-    if not args.no_ffscouter:
+    if args.ffscouter and not args.no_ffscouter:
         try:
             estimates = ffscouter.get_stats(ff_key, [m["id"] for m in raw_members])
             print(f"  FFScouter estimates: {len(estimates)}/{len(raw_members)}")
@@ -140,6 +140,7 @@ def main(argv=None) -> int:
     report_p.add_argument("--out", default="reports", help="output folder")
     report_p.add_argument("--author", default="", help="your name for the cover")
     report_p.add_argument("--json", action="store_true", help="also save json")
+    report_p.add_argument("--ffscouter", action="store_true", help="include FFScouter battle-stat estimates")
     report_p.add_argument("--no-ffscouter", action="store_true", help="skip ffscouter")
     report_p.add_argument("--activity-db", default="data/activity.db")
     report_p.add_argument("--days", type=int, default=14, help="activity days (default 14)")
