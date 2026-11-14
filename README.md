@@ -46,6 +46,24 @@ Set `FFSCOUTER_KEY` in `.env` to a key registered with FFScouter. If you leave i
 
 For the activity pages, run `python -m tornspector watch 12345` and leave it on for a week or so. It checks the roster every 15 minutes. Run the report again to include the activity data.
 
+During a war you probably want it faster, like every 2 minutes:
+
+```sh
+python -m tornspector watch 12345 --interval 120
+```
+
+To get the log into a spreadsheet, or to send it to someone:
+
+```sh
+python -m tornspector export 12345
+```
+
+That saves `data/activity-12345.csv`. Times are TCT. To merge a CSV someone else exported into your own log:
+
+```sh
+python -m tornspector import activity-12345.csv
+```
+
 ## notes
 
 - only counts wars a member was actually in the faction for, so new people aren't no-shows

@@ -1,5 +1,7 @@
 import sqlite3
+import tempfile
 import unittest
+from pathlib import Path
 
 from tornspector import activity, analysis, render
 from tornspector.demo import build_demo
@@ -100,6 +102,36 @@ class ActivityTests(unittest.TestCase):
         self.assertGreater(blocks[0], 0.9)
         self.assertLess(blocks[6], 0.1)
         self.assertEqual(max(a["player_blocks"][2]), 0)
+
+    def test_csv_round_trip(self):
+        src = sqlite3.connect(":memory:")
+        src.executescript(activity.SCHEMA)
+        activity.record_poll(src, 1, [{"id": 5, "name": "a,b", "last_action": {"timestamp": NOW - 60, "status": "Online"}}], NOW)
+        activity.record_poll(src, 2, [{"id": 6, "last_action": {"timestamp": NOW, "status": "Online"}}], NOW)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "log.csv"
+            self.assertEqual(activity.export_csv(src, 1, path), 1)
+
+            dst = sqlite3.connect(":memory:")
+            dst.executescript(activity.SCHEMA)
+            self.assertEqual(activity.import_csv(dst, path), 1)
+            self.assertEqual(activity.import_csv(dst, path), 0)  # dupes skipped
+
+        self.assertEqual(
+            dst.execute("SELECT * FROM sightings").fetchall(),
+            src.execute("SELECT * FROM sightings WHERE faction_id=1").fetchall(),
+        )
+        self.assertEqual(dst.execute("SELECT * FROM polls").fetchall(), [(1, NOW)])
+
+    def test_csv_missing_columns(self):
+        con = sqlite3.connect(":memory:")
+        con.executescript(activity.SCHEMA)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "bad.csv"
+            path.write_text("player_id,total\n1,5\n", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                activity.import_csv(con, path)
 
 
 class RenderTests(unittest.TestCase):
