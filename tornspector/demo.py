@@ -17,7 +17,7 @@ FACTION_ID = 99999
 NOW = 1_794_000_000  # fixed so the demo is reproducible
 
 
-def build_demo(seed: int = 7):
+def build_demo(seed=7):
     rng = random.Random(seed)
     raw_members, profiles = [], {}
     for i, name in enumerate(NAMES):
@@ -73,20 +73,38 @@ def build_demo(seed: int = 7):
     # 14 days of 15-minute polls with each player active around a "home" hour
     con = sqlite3.connect(":memory:")
     con.executescript(activity.SCHEMA)
+    # own rng for hospital/travel so the activity numbers above dont shift
+    status_rng = random.Random(seed + 1)
+    hosp_rate = {m["id"]: status_rng.choice([0.002, 0.005, 0.01, 0.02]) for m in raw_members}
+    away_rate = {m["id"]: status_rng.choice([0.0, 0.002, 0.006]) for m in raw_members}
+    busy = {}  # player -> (state, until)
     ts = NOW - 14 * 86400
     while ts <= NOW:
         hour = (ts % 86400) / 3600
         snap = []
         for m in raw_members:
-            _, _, home = profiles[m["id"]]
+            pid = m["id"]
+            _, _, home = profiles[pid]
             dist = min(abs(hour - home), 24 - abs(hour - home))
             p = 0.35 * max(0.0, 1 - dist / 7) + 0.03
             active = rng.random() < p
+
+            state, until = busy.get(pid, ("Okay", 0))
+            if ts >= until:
+                roll = status_rng.random()
+                if roll < hosp_rate[pid]:
+                    state, until = "Hospital", ts + int(status_rng.uniform(20, 180) * 60)
+                elif roll < hosp_rate[pid] + away_rate[pid]:
+                    state, until = "Traveling", ts + int(status_rng.uniform(1, 4) * 3600)
+                else:
+                    state, until = "Okay", 0
+                busy[pid] = (state, until)
             snap.append(
                 {
-                    "id": m["id"], "name": m["name"],
+                    "id": pid, "name": m["name"],
                     "last_action": {"status": "Online" if active else "Offline",
                                     "timestamp": ts - 60 if active else ts - 7200},
+                    "status": {"state": state, "until": until if state == "Hospital" else None},
                 }
             )
         activity.record_poll(con, FACTION_ID, snap, ts)
