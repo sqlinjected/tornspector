@@ -1,2 +1,2 @@
-"""Torn ranked-war intelligence reports from public API data."""
+"""torn ranked war intel reports"""
 __version__ = "0.1.0"
