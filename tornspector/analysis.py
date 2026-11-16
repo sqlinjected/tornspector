@@ -35,11 +35,11 @@ class War:
     hits: dict[int, int]  # player_id -> war hits
 
     @property
-    def duration_h(self) -> float:
+    def duration_h(self):
         return max((self.end - self.start) / 3600, 0.01)
 
     @property
-    def result(self) -> str:
+    def result(self):
         return "Unknown" if self.won is None else ("Win" if self.won else "Loss")
 
 
@@ -75,7 +75,7 @@ class Member:
     bs_source: str | None = None
 
 
-def parse_war(report: dict, faction_id: int) -> War | None:
+def parse_war(report, faction_id):
     factions = report.get("factions") or []
     ours = next((f for f in factions if f["id"] == faction_id), None)
     opp = next((f for f in factions if f["id"] != faction_id), None)
@@ -98,9 +98,10 @@ def parse_war(report: dict, faction_id: int) -> War | None:
     )
 
 
-def parse_member(raw: dict, estimate: dict | None = None) -> Member:
+def parse_member(raw, estimate=None):
     last_action = raw.get("last_action") or {}
     status = raw.get("status") or {}
+    est = estimate or {}
     return Member(
         id=int(raw["id"]),
         name=raw.get("name", str(raw["id"])),
@@ -110,9 +111,9 @@ def parse_member(raw: dict, estimate: dict | None = None) -> Member:
         revivable=raw.get("is_revivable"),
         last_action=last_action.get("relative", ""),
         state=status.get("state", ""),
-        bs_estimate=(estimate or {}).get("bs_estimate"),
-        fair_fight=(estimate or {}).get("fair_fight"),
-        bs_source=(estimate or {}).get("bs_source"),
+        bs_estimate=est.get("bs_estimate"),
+        fair_fight=est.get("fair_fight"),
+        bs_source=est.get("bs_source"),
     )
 
 
@@ -121,15 +122,14 @@ def _mean(values):
     return sum(values) / len(values) if values else None
 
 
-def _is_eligible(m: Member, war: War, now: int) -> bool:
+def _is_eligible(m, war, now):
     # joined before the war started, or has hits in it
     if war.hits.get(m.id, 0) > 0:
         return True
-    joined_at = now - m.days_in_faction * DAY
-    return joined_at <= war.start
+    return now - m.days_in_faction * DAY <= war.start
 
 
-def _trend(series: list[int]) -> str:
+def _trend(series):
     if len(series) < 3:
         return "Too few wars"
     half = len(series) // 2
@@ -146,7 +146,7 @@ def _trend(series: list[int]) -> str:
     return "Stable"
 
 
-def _consistency(series: list[int]) -> float:
+def _consistency(series):
     # 1 = same hits every war, 0 = all over the place
     if not series:
         return 0.0
@@ -157,7 +157,7 @@ def _consistency(series: list[int]) -> float:
     return max(0.0, 1 - cv / 1.5)
 
 
-def threat_level(avg_hits_per_war: float) -> str:
+def threat_level(avg_hits_per_war):
     if avg_hits_per_war >= 500:
         return "SEVERE"
     if avg_hits_per_war >= 250:
@@ -167,7 +167,7 @@ def threat_level(avg_hits_per_war: float) -> str:
     return "LOW"
 
 
-def _role(m: Member, median_active: float) -> str:
+def _role(m, median_active):
     if m.eligible == 0:
         return "New (no war history)"
     if (
@@ -194,7 +194,7 @@ def _role(m: Member, median_active: float) -> str:
     return "Sporadic"
 
 
-def analyse(faction: dict, members: list[Member], wars: list[War], now: int) -> dict:
+def analyse(faction, members, wars, now):
     wars = sorted(wars, key=lambda w: w.start)  # War 1 = oldest
     roster_ids = {m.id for m in members}
 
@@ -299,15 +299,12 @@ def analyse(faction: dict, members: list[Member], wars: list[War], now: int) -> 
     elif with_bs:
         bs_cut = with_bs[-1].bs_estimate
     # strong on paper but skips wars
-    unreliable = [
-        m
-        for m in members
-        if bs_cut
-        and m.bs_estimate
-        and m.bs_estimate >= bs_cut
-        and m.eligible >= 3
-        and m.participation < REGULAR_PARTICIPATION
-    ]
+    unreliable = []
+    for m in members:
+        if not bs_cut or not m.bs_estimate or m.bs_estimate < bs_cut:
+            continue
+        if m.eligible >= 3 and m.participation < REGULAR_PARTICIPATION:
+            unreliable.append(m)
 
     avg_hits = _mean(hits_per_war) or 0.0
     summary = {
@@ -349,9 +346,10 @@ def analyse(faction: dict, members: list[Member], wars: list[War], now: int) -> 
     }
 
 
-def to_jsonable(result: dict) -> dict:
-    jsonable = dict(result)
-    jsonable["members"] = [asdict(m) for m in result["members"]]
-    jsonable["heavy"] = [m.id for m in result["heavy"]]
-    jsonable["unreliable"] = [m.id for m in result["unreliable"]]
-    return jsonable
+def to_jsonable(result):
+    # dataclasses dont go through json.dumps
+    out = dict(result)
+    out["members"] = [asdict(m) for m in result["members"]]
+    out["heavy"] = [m.id for m in result["heavy"]]
+    out["unreliable"] = [m.id for m in result["unreliable"]]
+    return out
