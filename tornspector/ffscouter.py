@@ -6,24 +6,22 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-BASE_URL = "https://ffscouter.com/api/v1"
-BATCH = 100  # a torn faction maxes out at 100 members, so one request covers it
+URL = "https://ffscouter.com/api/v1/get-stats"
 
 
 class FFScouterError(RuntimeError):
     pass
 
 
-def get_stats(key: str, player_ids: list[int]) -> dict[int, dict]:
-    estimates: dict[int, dict] = {}
+def get_stats(key, player_ids):
+    found = {}
     ids = [int(i) for i in player_ids]
-    for i in range(0, len(ids), BATCH):
-        chunk = ids[i : i + BATCH]
+    # 100 ids per request. a faction maxes out at 100 members so its normally one call
+    for i in range(0, len(ids), 100):
+        chunk = ids[i : i + 100]
         # ffscouter only takes the key as a query param, no header option
         query = urllib.parse.urlencode({"key": key, "targets": ",".join(map(str, chunk))})
-        req = urllib.request.Request(
-            f"{BASE_URL}/get-stats?{query}", headers={"User-Agent": "tornspector/0.1"}
-        )
+        req = urllib.request.Request(URL + "?" + query, headers={"User-Agent": "tornspector/0.1"})
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
                 rows = json.load(resp)
@@ -39,7 +37,7 @@ def get_stats(key: str, player_ids: list[int]) -> dict[int, dict]:
         for row in rows:
             if row.get("no_data") or row.get("bs_estimate") is None:
                 continue
-            estimates[int(row["player_id"])] = row
-        if i + BATCH < len(ids):
+            found[int(row["player_id"])] = row
+        if i + 100 < len(ids):
             time.sleep(1)  # pause between batches so ffscouter doesnt throw errors
-    return estimates
+    return found

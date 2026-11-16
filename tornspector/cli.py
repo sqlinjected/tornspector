@@ -13,7 +13,7 @@ from . import activity, analysis, ffscouter, render
 from .torn import TornAPIError, TornClient
 
 
-def load_dotenv(path: str = ".env") -> None:
+def load_dotenv(path=".env"):
     # small .env loader so theres no dependencies
     env_file = Path(path)
     if not env_file.exists():
@@ -26,17 +26,15 @@ def load_dotenv(path: str = ".env") -> None:
         os.environ.setdefault(name.strip(), value.strip().strip('"').strip("'"))
 
 
-def _safe_filename(name: str) -> str:
-    # strip the characters windows wont allow in a filename
-    return re.sub(r'[<>:"/\\|?*]+', "", name).strip()
-
-
-def write_outputs(result, act, out_dir: Path, author: str, as_json: bool) -> Path:
+def write_outputs(result, act, out_dir, author, as_json):
     out_dir.mkdir(parents=True, exist_ok=True)
     html = render.render(result, act, author=author)
     name = result["faction"].get("name", str(result["faction"].get("id")))
     stamp = time.strftime("%Y-%m-%d", time.gmtime(result["generated_at"]))
-    base = out_dir / _safe_filename(f"{name} - Enemy Historical Intelligence - {stamp}")
+    filename = f"{name} - Enemy Historical Intelligence - {stamp}"
+    # windows wont allow these in a filename
+    filename = re.sub(r'[<>:"/\\|?*]+', "", filename).strip()
+    base = out_dir / filename
     html_path = base.with_suffix(".html")
     html_path.write_text(html, encoding="utf-8")
     if as_json:
@@ -46,12 +44,11 @@ def write_outputs(result, act, out_dir: Path, author: str, as_json: bool) -> Pat
     return html_path
 
 
-def load_spies(path: Path) -> dict[int, dict]:
+def load_spies(path):
     spies = {}
     with path.open(encoding="utf-8-sig", newline="") as file:
         rows = csv.DictReader(file, strict=True)
-        required_columns = {"player_id", "total"}
-        if not rows.fieldnames or not required_columns <= set(rows.fieldnames):
+        if not rows.fieldnames or not {"player_id", "total"} <= set(rows.fieldnames):
             raise ValueError("expected player_id and total columns")
         if len(set(rows.fieldnames)) != len(rows.fieldnames):
             raise ValueError("CSV has duplicate column names")
@@ -73,7 +70,7 @@ def load_spies(path: Path) -> dict[int, dict]:
     return spies
 
 
-def cmd_report(args) -> int:
+def cmd_report(args):
     try:
         estimates = load_spies(args.spies) if args.spies else {}
     except (OSError, ValueError, csv.Error) as exc:
@@ -134,7 +131,7 @@ def cmd_report(args) -> int:
     return 0
 
 
-def cmd_watch(args) -> int:
+def cmd_watch(args):
     key = os.environ.get("TORN_API_KEY", "")
     if not key:
         print("no TORN_API_KEY (put it in .env)", file=sys.stderr)
@@ -147,7 +144,8 @@ def cmd_watch(args) -> int:
         for fid in args.faction_ids:
             try:
                 n = activity.record_poll(con, fid, client.faction_members(fid), ts)
-                print(f"{time.strftime('%Y-%m-%d %H:%M', time.gmtime(ts))} TCT  faction {fid}: {n} members logged")
+                when = time.strftime("%Y-%m-%d %H:%M", time.gmtime(ts))
+                print(f"{when} TCT  faction {fid}: {n} members logged")
             except (TornAPIError, OSError) as exc:
                 print(f"  poll failed for {fid}: {exc}", file=sys.stderr)
         if args.once:
@@ -156,7 +154,7 @@ def cmd_watch(args) -> int:
         time.sleep(args.interval - (time.time() % args.interval) + 2)
 
 
-def cmd_export(args) -> int:
+def cmd_export(args):
     if not Path(args.activity_db).exists():
         print(f"no activity log at {args.activity_db}, run watch first", file=sys.stderr)
         return 1
@@ -170,7 +168,7 @@ def cmd_export(args) -> int:
     return 0
 
 
-def cmd_import(args) -> int:
+def cmd_import(args):
     if not args.csv_file.exists():
         print(f"Could not find {args.csv_file}", file=sys.stderr)
         return 2
@@ -184,7 +182,7 @@ def cmd_import(args) -> int:
     return 0
 
 
-def cmd_demo(args) -> int:
+def cmd_demo(args):
     from .demo import build_demo
 
     result, act = build_demo()
@@ -193,47 +191,47 @@ def cmd_demo(args) -> int:
     return 0
 
 
-def main(argv=None) -> int:
+def main(argv=None):
     load_dotenv()
     parser = argparse.ArgumentParser(prog="tornspector", description="torn war intel")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    report_p = sub.add_parser("report", help="make a report")
-    report_p.add_argument("faction_id", type=int)
-    report_p.add_argument("--wars", type=int, default=10, help="number of wars (default 10)")
-    report_p.add_argument("--out", default="reports", help="output folder")
-    report_p.add_argument("--author", default="", help="your name for the cover")
-    report_p.add_argument("--json", action="store_true", help="also save json")
-    report_p.add_argument("--spies", type=Path, help="local CSV with player_id and total")
-    report_p.add_argument("--ffscouter", action="store_true", help="include FFScouter battle-stat estimates")
-    report_p.add_argument("--no-ffscouter", action="store_true", help="skip ffscouter")
-    report_p.add_argument("--activity-db", default="data/activity.db")
-    report_p.add_argument("--days", type=int, default=14, help="activity days (default 14)")
-    report_p.add_argument("--cache", default="cache", help="cache folder")
-    report_p.set_defaults(func=cmd_report)
+    p = sub.add_parser("report", help="make a report")
+    p.add_argument("faction_id", type=int)
+    p.add_argument("--wars", type=int, default=10, help="number of wars (default 10)")
+    p.add_argument("--out", default="reports", help="output folder")
+    p.add_argument("--author", default="", help="your name for the cover")
+    p.add_argument("--json", action="store_true", help="also save json")
+    p.add_argument("--spies", type=Path, help="local CSV with player_id and total")
+    p.add_argument("--ffscouter", action="store_true", help="include FFScouter battle-stat estimates")
+    p.add_argument("--no-ffscouter", action="store_true", help="skip ffscouter")
+    p.add_argument("--activity-db", default="data/activity.db")
+    p.add_argument("--days", type=int, default=14, help="activity days (default 14)")
+    p.add_argument("--cache", default="cache", help="cache folder")
+    p.set_defaults(func=cmd_report)
 
-    watch_p = sub.add_parser("watch", help="track activity")
-    watch_p.add_argument("faction_ids", type=int, nargs="+")
-    watch_p.add_argument("--interval", type=int, default=900, help="seconds between polls")
-    watch_p.add_argument("--activity-db", default="data/activity.db")
-    watch_p.add_argument("--once", action="store_true", help="poll once and exit")
-    watch_p.set_defaults(func=cmd_watch)
+    p = sub.add_parser("watch", help="track activity")
+    p.add_argument("faction_ids", type=int, nargs="+")
+    p.add_argument("--interval", type=int, default=900, help="seconds between polls")
+    p.add_argument("--activity-db", default="data/activity.db")
+    p.add_argument("--once", action="store_true", help="poll once and exit")
+    p.set_defaults(func=cmd_watch)
 
-    export_p = sub.add_parser("export", help="save the activity log as csv")
-    export_p.add_argument("faction_id", type=int)
-    export_p.add_argument("--out", type=Path, help="csv path (default data/activity-ID.csv)")
-    export_p.add_argument("--activity-db", default="data/activity.db")
-    export_p.set_defaults(func=cmd_export)
+    p = sub.add_parser("export", help="save the activity log as csv")
+    p.add_argument("faction_id", type=int)
+    p.add_argument("--out", type=Path, help="csv path (default data/activity-ID.csv)")
+    p.add_argument("--activity-db", default="data/activity.db")
+    p.set_defaults(func=cmd_export)
 
-    import_p = sub.add_parser("import", help="add an activity csv to the log")
-    import_p.add_argument("csv_file", type=Path)
-    import_p.add_argument("--activity-db", default="data/activity.db")
-    import_p.set_defaults(func=cmd_import)
+    p = sub.add_parser("import", help="add an activity csv to the log")
+    p.add_argument("csv_file", type=Path)
+    p.add_argument("--activity-db", default="data/activity.db")
+    p.set_defaults(func=cmd_import)
 
-    demo_p = sub.add_parser("demo", help="fake data report")
-    demo_p.add_argument("--out", default="reports")
-    demo_p.add_argument("--json", action="store_true")
-    demo_p.set_defaults(func=cmd_demo)
+    p = sub.add_parser("demo", help="fake data report")
+    p.add_argument("--out", default="reports")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_demo)
 
     args = parser.parse_args(argv)
     try:
