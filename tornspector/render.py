@@ -6,7 +6,7 @@ from html import escape
 LEVEL_COLOR = {"LOW": "#2f855a", "MODERATE": "#b7791f", "HIGH": "#c53030", "SEVERE": "#742a2a"}
 
 
-def fmt_bs(n: float | None) -> str:
+def fmt_bs(n):
     if not n:
         return "-"
     for unit, size in (("b", 1e9), ("m", 1e6), ("k", 1e3)):
@@ -15,7 +15,7 @@ def fmt_bs(n: float | None) -> str:
     return f"{n:.0f}"
 
 
-def fmt_member_bs(member) -> str:
+def fmt_member_bs(member):
     total = fmt_bs(member.bs_estimate)
     if member.bs_source == "spy" and total != "-":
         return f"{total} (spy)"
@@ -79,7 +79,7 @@ def _bar_chart(profile):
     )
 
 
-def render(result: dict, activity: dict | None = None, author: str = "") -> str:
+def render(result, activity=None, author=""):
     faction = result["faction"]
     summary = result["summary"]
     members = result["members"]
@@ -173,11 +173,20 @@ def render(result: dict, activity: dict | None = None, author: str = "") -> str:
             for w in activity["windows"]
         )
         blocks_head = "".join(f"<th>{h:02d}-{h + 2:02d}</th>" for h in range(0, 24, 2))
+        # logs from before v0.3 have no status, so these stay empty for them
+        player_status = activity.get("player_status") or {}
         heat_rows = "".join(
             f"<tr><td>{escape(m.name)}</td><td class='r'>{m.threat:.1f}</td><td class='r'>{fmt_member_bs(m)}</td>"
+            f"<td class='r'>{_pct(player_status.get(m.id, {}).get('hosp'), 0)}</td>"
+            f"<td class='r'>{_pct(player_status.get(m.id, {}).get('away'), 0)}</td>"
             + "".join(_heat(v) for v in activity["player_blocks"].get(m.id, [None] * 12))
             + "</tr>"
             for m in by_threat[:10]
+        )
+        ready_html = (
+            f"<div><b>{activity['avg_ready']:.1f}</b> average ready (active, not hosped, jailed or away)</div>"
+            if player_status
+            else ""
         )
         partial = (
             f" Only {activity['span_days']:.1f} days of data so far."
@@ -192,6 +201,7 @@ def render(result: dict, activity: dict | None = None, author: str = "") -> str:
     <table><thead><tr><th>Sustained window</th><th>TCT period</th><th>Avg active</th><th>Of roster</th></tr></thead><tbody>{window_rows}</tbody></table>
     <div class="box">
       <div><b>{activity['avg_bucket']:.1f}</b> average active per 15-min slot</div>
+      {ready_html}
       <div><b>{_pct(activity['avg_ratio'])}</b> average observed ratio</div>
       <div><b>{activity['peak_single']}</b> peak in a single poll</div>
       <div><b>{activity['roster_size']}</b> members tracked</div>
@@ -202,8 +212,8 @@ def render(result: dict, activity: dict | None = None, author: str = "") -> str:
 </section>
 <section class="page">
   <h2>Key threat activity</h2>
-  <p class="sub">% of polls they were active in each 2h block (TCT). Top 10 by threat.</p>
-  <table class="heatmap"><thead><tr><th>Player</th><th>Threat</th><th>BS</th>{blocks_head}</tr></thead><tbody>{heat_rows}</tbody></table>
+  <p class="sub">% of polls they were active in each 2h block (TCT). Hosp and Away are % of polls in hospital or out of the country. Top 10 by threat.</p>
+  <table class="heatmap"><thead><tr><th>Player</th><th>Threat</th><th>BS</th><th>Hosp</th><th>Away</th>{blocks_head}</tr></thead><tbody>{heat_rows}</tbody></table>
 </section>"""
     else:
         activity_html = """
@@ -285,6 +295,7 @@ def render(result: dict, activity: dict | None = None, author: str = "") -> str:
 </body></html>"""
 
 
+# TODO move the css into its own file, this one is getting long
 CSS = """
 :root{--ink:#1a202c;--muted:#4a5568;--line:#e2e8f0;--navy:#1a2238;--accent:#c53030}
 *{box-sizing:border-box}
