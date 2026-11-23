@@ -9,6 +9,9 @@
   input, button { padding:8px; margin:4px 0; background:#2b2b2b; color:#ddd; border:1px solid #444; }
   button { cursor:pointer; }
   #out { margin-top:20px; white-space:pre-wrap; }
+  table { border-collapse:collapse; width:100%; margin-top:16px; font-size:14px; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid #333; }
+  th { color:#999; font-weight:normal; }
 </style>
 </head>
 <body>
@@ -20,11 +23,13 @@
 <button id="go">Go</button>
 
 <div id="out"></div>
+<table id="members"></table>
 
 <script>
 const API = "https://api.torn.com/v2";
 const out = document.getElementById("out");
 const keyBox = document.getElementById("key");
+const table = document.getElementById("members");
 
 keyBox.value = localStorage.getItem("tornspector_key") || "";
 
@@ -35,16 +40,38 @@ async function torn(path, key) {
   return data;
 }
 
+function showMembers(members) {
+  table.innerHTML = "";
+  const head = table.insertRow();
+  for (const h of ["Name", "Level", "Position", "Status", "Last action"]) {
+    const th = document.createElement("th");
+    th.textContent = h;
+    head.appendChild(th);
+  }
+  members.sort((a, b) => b.level - a.level);
+  for (const m of members) {
+    const row = table.insertRow();
+    const st = m.status || {};
+    const la = m.last_action || {};
+    for (const val of [m.name, m.level, m.position, st.description || st.state, la.relative]) {
+      row.insertCell().textContent = val ?? "";
+    }
+  }
+}
+
 document.getElementById("go").onclick = async () => {
   const key = keyBox.value.trim();
   const fid = document.getElementById("fid").value.trim();
   if (!key || !fid) { out.textContent = "need a key and a faction id"; return; }
   localStorage.setItem("tornspector_key", key);
   out.textContent = "loading...";
+  table.innerHTML = "";
   try {
     const data = await torn("/faction/" + fid + "/basic", key);
     const b = data.basic || data;
     out.textContent = b.name + " [" + b.tag + "]\nmembers: " + b.members + "\nrespect: " + b.respect;
+    const mem = await torn("/faction/" + fid + "/members", key);
+    showMembers(mem.members || []);
   } catch (e) {
     out.textContent = e.message;
   }
