@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tornspector</title>
+<style>
+  body { background:#1e1e1e; color:#ddd; font-family:sans-serif; max-width:700px; margin:40px auto; padding:0 16px; }
+  input, button { padding:8px; margin:4px 0; background:#2b2b2b; color:#ddd; border:1px solid #444; }
+  button { cursor:pointer; }
+  #out { margin-top:20px; white-space:pre-wrap; }
+</style>
+</head>
+<body>
+<h1>tornspector</h1>
+<p>Public key only. Your key goes straight from your browser to Torn and nowhere else.</p>
+
+<input id="key" type="password" placeholder="Public API key">
+<input id="fid" type="number" placeholder="Faction ID">
+<button id="go">Go</button>
+
+<div id="out"></div>
+
+<script>
+const API = "https://api.torn.com/v2";
+const out = document.getElementById("out");
+const keyBox = document.getElementById("key");
+
+keyBox.value = localStorage.getItem("tornspector_key") || "";
+
+async function torn(path, key) {
+  const res = await fetch(API + path + "?comment=tornspector&key=" + encodeURIComponent(key));
+  const data = await res.json();
+  if (data.error) throw new Error("Torn API error " + data.error.code + ": " + data.error.error);
+  return data;
+}
+
+document.getElementById("go").onclick = async () => {
+  const key = keyBox.value.trim();
+  const fid = document.getElementById("fid").value.trim();
+  if (!key || !fid) { out.textContent = "need a key and a faction id"; return; }
+  localStorage.setItem("tornspector_key", key);
+  out.textContent = "loading...";
+  try {
+    const data = await torn("/faction/" + fid + "/basic", key);
+    const b = data.basic || data;
+    out.textContent = b.name + " [" + b.tag + "]\nmembers: " + b.members + "\nrespect: " + b.respect;
+  } catch (e) {
+    out.textContent = e.message;
+  }
+};
+</script>
+</body>
+</html>
