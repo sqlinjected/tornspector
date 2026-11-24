@@ -24,12 +24,16 @@
 
 <div id="out"></div>
 <table id="members"></table>
+<h3 id="warsTitle"></h3>
+<table id="wars"></table>
 
 <script>
 const API = "https://api.torn.com/v2";
 const out = document.getElementById("out");
 const keyBox = document.getElementById("key");
 const table = document.getElementById("members");
+const warsTable = document.getElementById("wars");
+const warsTitle = document.getElementById("warsTitle");
 
 keyBox.value = localStorage.getItem("tornspector_key") || "";
 
@@ -59,6 +63,29 @@ function showMembers(members) {
   }
 }
 
+function showWars(wars, fid) {
+  warsTable.innerHTML = "";
+  warsTitle.textContent = "Ranked wars";
+  if (!wars.length) { warsTitle.textContent = "No ranked wars"; return; }
+  const head = warsTable.insertRow();
+  for (const h of ["Date", "Opponent", "Score", "Result"]) {
+    const th = document.createElement("th");
+    th.textContent = h;
+    head.appendChild(th);
+  }
+  for (const w of wars) {
+    const fs = w.factions || [];
+    const us = fs.find(f => f.id == fid) || {};
+    const them = fs.find(f => f.id != fid) || {};
+    let result = "ongoing";
+    if (w.end) result = !w.winner ? "?" : (w.winner == fid ? "Win" : "Loss");
+    const row = warsTable.insertRow();
+    for (const val of [new Date(w.start * 1000).toLocaleDateString(), them.name, (us.score ?? "?") + " - " + (them.score ?? "?"), result]) {
+      row.insertCell().textContent = val ?? "";
+    }
+  }
+}
+
 document.getElementById("go").onclick = async () => {
   const key = keyBox.value.trim();
   const fid = document.getElementById("fid").value.trim();
@@ -66,12 +93,16 @@ document.getElementById("go").onclick = async () => {
   localStorage.setItem("tornspector_key", key);
   out.textContent = "loading...";
   table.innerHTML = "";
+  warsTable.innerHTML = "";
+  warsTitle.textContent = "";
   try {
     const data = await torn("/faction/" + fid + "/basic", key);
     const b = data.basic || data;
     out.textContent = b.name + " [" + b.tag + "]\nmembers: " + b.members + "\nrespect: " + b.respect;
     const mem = await torn("/faction/" + fid + "/members", key);
     showMembers(mem.members || []);
+    const rw = await torn("/faction/" + fid + "/rankedwars", key);
+    showWars(rw.rankedwars || [], fid);
   } catch (e) {
     out.textContent = e.message;
   }
